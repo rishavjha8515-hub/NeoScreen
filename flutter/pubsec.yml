@@ -1,0 +1,61 @@
+name: neoscreen
+description: Newborn jaundice detection via smartphone camera. Offline, free, works on Android 8+.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Camera access
+  camera: ^0.10.5+9
+
+  # On-device TF Lite inference
+  tflite_flutter: ^0.10.4
+
+  # Local PHC database
+  sqflite: ^2.3.2
+  path_provider: ^2.1.2
+  path: ^1.9.0
+
+  # GPS for nearest-PHC lookup
+  geolocator: ^11.0.0+1
+
+  # SMS referral (wraps Twilio REST)
+  twilio_flutter: ^0.4.0
+
+  # Image processing helpers
+  image: ^4.1.7
+
+  # Internationalisation (Hindi / English)
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.19.0
+
+  # Permissions
+  permission_handler: ^11.3.0
+
+  # Environment variables (Twilio keys)
+  flutter_dotenv: ^5.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/models/neoscreen_v1.tflite
+    - assets/data/phc_maharashtra.db
+    - .env
+
+  # App icon (replace with actual icon before submission)
+  # flutter_icons:
+  #   android: true
+  #   ios: false
+  #   image_path: "assets/icon/icon.png"
