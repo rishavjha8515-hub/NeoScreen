@@ -1,0 +1,110 @@
+name: NeoScreen CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Python ML pipeline tests ────────────────────────────────────────────────
+  python-tests:
+    name: Python ML Pipeline
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Seed PHC database
+        run: python scripts/seed_phc_db.py
+
+      - name: Lint (ruff)
+        run: |
+          pip install ruff
+          ruff check ml/ scripts/
+
+      - name: Test sclera detection (synthetic image)
+        run: |
+          python - <<'EOF'
+          import numpy as np, cv2, tempfile, os
+          from ml.sclera_detection import apply_clahe, apply_white_balance
+
+          # Create a synthetic white-region image
+          img = np.zeros((480, 640, 3), dtype=np.uint8)
+          cv2.ellipse(img, (320, 240), (120, 80), 0, 0, 360, (240, 240, 200), -1)
+          tmp = tempfile.NamedTemporaryFile(suffix='.jpg', delete=False)
+          cv2.imwrite(tmp.name, img)
+
+          enhanced = apply_clahe(img)
+          balanced = apply_white_balance(img)
+          assert enhanced.shape == img.shape
+          assert balanced.shape == img.shape
+          print("Sclera preprocessing: PASS")
+          os.unlink(tmp.name)
+          EOF
+
+      - name: Test inference thresholds
+        run: |
+          python - <<'EOF'
+          from ml.inference import classify_risk, get_risk_message
+          import numpy as np
+
+          # High threshold
+          assert classify_risk(np.array([0.3, 0.35, 0.35])) == 'HIGH'
+          # Low threshold
+          assert classify_risk(np.array([0.65, 0.2, 0.15])) == 'LOW'
+          # Medium (neither threshold met)
+          assert classify_risk(np.array([0.4, 0.4, 0.2])) == 'MEDIUM'
+          # Boundary: P(High) exactly 0.35 → HIGH
+          assert classify_risk(np.array([0.3, 0.35, 0.35])) == 'HIGH'
+
+          assert 'PHC' in get_risk_message('HIGH', 'en')
+          assert 'turant' in get_risk_message('HIGH', 'hi')
+          print("Threshold logic: PASS")
+          EOF
+
+  # ── Flutter static analysis ─────────────────────────────────────────────────
+  flutter-analysis:
+    name: Flutter Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.x"
+          channel: stable
+          cache: true
+
+      - name: Create placeholder assets
+        run: |
+          mkdir -p flutter/assets/models flutter/assets/data
+          # Placeholder files so flutter pub get doesn't fail on asset resolution
+          touch flutter/assets/models/neoscreen_v1.tflite
+          touch flutter/assets/data/phc_maharashtra.db
+          echo "TWILIO_SID=placeholder" > flutter/.env
+          echo "TWILIO_TOKEN=placeholder" >> flutter/.env
+          echo "TWILIO_FROM=+10000000000" >> flutter/.env
+
+      - name: Flutter pub get
+        working-directory: flutter
+        run: flutter pub get
+
+      - name: Flutter analyze
+        working-directory: flutter
+        run: flutter analyze --no-fatal-infos
+
+      - name: Flutter test
+        working-directory: flutter
+        run: flutter test
